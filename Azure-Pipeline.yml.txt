@@ -1,0 +1,26 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.x'
+
+- script: |
+    python app.py
+  displayName: 'Run Python App'
+
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: '.'
+    archiveType: 'zip'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/pythonapp.zip'
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'drop'
