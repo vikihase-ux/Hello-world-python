@@ -4,23 +4,68 @@ trigger:
 pool:
   vmImage: ubuntu-latest
 
-steps:
+stages:
 
-- task: UsePythonVersion@0
-  inputs:
-    versionSpec: '3.x'
+# -----------------
+# CI
+# -----------------
+- stage: Build
 
-- script: |
-    python app.py
-  displayName: 'Run Python App'
+  jobs:
+  - job: BuildJob
 
-- task: ArchiveFiles@2
-  inputs:
-    rootFolderOrFile: '.'
-    archiveType: 'zip'
-    archiveFile: '$(Build.ArtifactStagingDirectory)/pythonapp.zip'
+    steps:
 
-- task: PublishBuildArtifacts@1
-  inputs:
-    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-    ArtifactName: 'drop'
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.x'
+
+    - script: |
+        python app.py
+      displayName: Run Python App
+
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: '.'
+        archiveType: zip
+        archiveFile: $(Build.ArtifactStagingDirectory)/pythonapp.zip
+
+    - publish: $(Build.ArtifactStagingDirectory)/pythonapp.zip
+      artifact: pythonapp
+
+# -----------------
+# CD
+# -----------------
+- stage: Deploy
+
+  dependsOn: Build
+
+  jobs:
+  - deployment: DeployToVM
+
+    environment: Production
+
+    strategy:
+      runOnce:
+        deploy:
+
+          steps:
+
+          - download: current
+            artifact: pythonapp
+
+          - task: CopyFilesOverSSH@0
+            inputs:
+              sshEndpoint: 'linux-vm-ssh'
+              sourceFolder: '$(Pipeline.Workspace)/pythonapp'
+              contents: '**'
+              targetFolder: '/opt/pythonapp'
+
+          - task: SSH@0
+            inputs:
+              sshEndpoint: 'linux-vm-ssh'
+              runOptions: inline
+              inline: |
+                cd /opt/pythonapp
+                unzip -o pythonapp.zip
+                python3 app.py
